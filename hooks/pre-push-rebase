@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# Get the current branch name
+CURRENT_BRANCH=$(git symbolic-ref --short HEAD)
+BASE_BRANCH="__BASE_BRANCH__"
+
+echo "✅ Git repository detected, running pre-push hook with base branch: $BASE_BRANCH"
+
+# Skip if we're already on $BASE_BRANCH branch
+if [ "$CURRENT_BRANCH" = "$BASE_BRANCH" ]; then
+    exit 0
+fi
+
+# Check for unstashed changes
+if ! git diff --quiet || ! git diff --cached --quiet; then
+    echo "❌ Error: You have unstashed changes. Please commit or stash them before pushing."
+    exit 1
+fi
+
+echo "📦 Pre-push hook: Updating $BASE_BRANCH branch and rebasing current branch..."
+
+# Store the current branch name
+ORIGINAL_BRANCH=$CURRENT_BRANCH
+
+# Switch to $BASE_BRANCH and pull latest changes
+git checkout $BASE_BRANCH || { echo "❌ Failed to checkout $BASE_BRANCH branch"; exit 1; }
+git pull origin $BASE_BRANCH || { 
+    echo "❌ Failed to pull $BASE_BRANCH branch"
+    git checkout "$ORIGINAL_BRANCH"
+    exit 1
+}
+
+# Switch back to original branch
+git checkout "$ORIGINAL_BRANCH" || { 
+    echo "❌ Failed to checkout back to original branch"
+    exit 1
+}
+
+# Rebase current branch on $BASE_BRANCH
+git rebase $BASE_BRANCH || {
+    echo "❌ Rebase failed. Please resolve conflicts manually"
+    git rebase --abort
+    exit 1
+}
+
+echo "✅ Successfully updated and rebased with $BASE_BRANCH"
+exit 0 
